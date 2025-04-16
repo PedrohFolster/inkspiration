@@ -14,6 +14,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Toast from 'react-native-toast-message';
 
 import Header from '../components/Header';
 import Input from '../components/ui/Input';
@@ -300,16 +302,35 @@ const RegisterScreen = () => {
 
   const handleRegister = async () => {
     if (formData.senha !== formData.confirmarSenha) {
-      setErrorMessage('As senhas não coincidem');
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'As senhas não coincidem',
+        position: 'top',
+        visibilityTime: 3000
+      });
       return;
     }
 
     if (!formData.termsAccepted) {
-      setErrorMessage('Você precisa aceitar os termos de uso');
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Você precisa aceitar os termos de uso',
+        position: 'top',
+        visibilityTime: 3000
+      });
       return;
     }
 
     if (!validateForm()) {
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Por favor, preencha todos os campos obrigatórios',
+        position: 'top',
+        visibilityTime: 3000
+      });
       return;
     }
 
@@ -345,58 +366,67 @@ const RegisterScreen = () => {
 
       console.log('Enviando dados de registro:', userData);
       
-      // URL fixa para o backend
-      // Se estiver testando em dispositivos físicos, substitua 'localhost' pelo IP da sua máquina (ex: 192.168.1.100)
       const baseUrl = 'http://localhost:8080'; 
-      const response = await axios.post(`${baseUrl}/auth/register`, userData, {
+      const response = await fetch(`${baseUrl}/auth/register`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify(userData)
       });
       
-      if (response.status === 200 || response.status === 201) {
-        console.log('Registro bem-sucedido:', response.data);
-        Alert.alert(
-          'Sucesso', 
-          'Conta criada com sucesso! Faça login para continuar.',
-          [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
-        );
+      if (!response.ok) {
+        if (response.status === 409) {
+          Toast.show({
+            type: 'error',
+            text1: 'Erro',
+            text2: 'CPF ou email já cadastrado',
+            position: 'top',
+            visibilityTime: 3000
+          });
+        } else {
+          const errorData = await response.json();
+          Toast.show({
+            type: 'error',
+            text1: 'Erro',
+            text2: errorData.message || 'Ocorreu um erro ao criar sua conta',
+            position: 'top',
+            visibilityTime: 3000
+          });
+        }
+        return;
       }
+
+      // A resposta é apenas o token como string
+      const token = await response.text();
+
+      // Salvar token e dados do usuário
+      await AsyncStorage.setItem('token', token);
+      await AsyncStorage.setItem('user', JSON.stringify({ cpf: formData.cpf }));
+
+      Toast.show({
+        type: 'success',
+        text1: 'Sucesso',
+        text2: 'Conta criada com sucesso! Faça login para continuar.',
+        position: 'top',
+        visibilityTime: 3000,
+        onHide: () => {
+          // Navegar para a tela de login após o toast desaparecer
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          });
+        }
+      });
     } catch (error) {
       console.error('Erro ao registrar:', error);
-      
-      let errorMsg = 'Ocorreu um erro ao criar sua conta. Tente novamente.';
-      
-      if (error.response) {
-        console.log('Erro de resposta:', error.response.data);
-        // Tratando erros específicos baseados na resposta do servidor
-        if (error.response.data && typeof error.response.data === 'string') {
-          errorMsg = error.response.data;
-        } else if (error.response.data && error.response.data.message) {
-          errorMsg = error.response.data.message;
-        } else {
-          // Tratando códigos de erro HTTP comuns
-          switch (error.response.status) {
-            case 400:
-              errorMsg = 'Dados inválidos. Verifique suas informações.';
-              break;
-            case 409:
-              errorMsg = 'Email ou CPF já cadastrado no sistema.';
-              break;
-            case 422:
-              errorMsg = 'Erro na validação dos dados. Verifique todos os campos.';
-              break;
-            case 500:
-              errorMsg = 'Erro no servidor. Tente novamente mais tarde.';
-              break;
-          }
-        }
-      } else if (error.request) {
-        // Erro de conexão (sem resposta do servidor)
-        errorMsg = 'Não foi possível conectar ao servidor. Verifique sua conexão.';
-      }
-      
-      setErrorMessage(errorMsg);
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Ocorreu um erro ao criar sua conta. Tente novamente.',
+        position: 'top',
+        visibilityTime: 3000
+      });
     } finally {
       setIsLoading(false);
     }
@@ -1007,6 +1037,7 @@ const RegisterScreen = () => {
           </View>
         </View>
       </ScrollView>
+      <Toast />
     </SafeAreaView>
   );
 };

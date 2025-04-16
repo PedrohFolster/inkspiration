@@ -6,16 +6,21 @@ import {
   TouchableOpacity, 
   ScrollView, 
   KeyboardAvoidingView, 
-  Platform 
+  Platform,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Toast from 'react-native-toast-message';
 
 import Header from '../components/Header';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 import Checkbox from '../components/ui/Checkbox';
 import theme from '../themes/theme';
+
+const API_URL = 'http://localhost:8080';
 
 const LoginScreen = () => {
   const navigation = useNavigation();
@@ -24,14 +29,80 @@ const LoginScreen = () => {
     password: '',
   });
   const [rememberMe, setRememberMe] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = () => {
-    console.log('Login:', formData);
-    // Implementar lógica de login
+  const handleSubmit = async () => {
+    if (!formData.cpf || !formData.password) {
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Por favor, preencha todos os campos',
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          cpf: formData.cpf.replace(/\D/g, ''),
+          senha: formData.password,
+        }),
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          Toast.show({
+            type: 'error',
+            text1: 'Erro',
+            text2: 'CPF ou senha inválidos',
+          });
+        } else {
+          const errorData = await response.json();
+          Toast.show({
+            type: 'error',
+            text1: 'Erro',
+            text2: errorData.message || 'Ocorreu um erro ao fazer login',
+          });
+        }
+        return;
+      }
+
+      // A resposta é apenas o token como string
+      const token = await response.text();
+
+      // Salvar token e dados do usuário
+      await AsyncStorage.setItem('token', token);
+      await AsyncStorage.setItem('user', JSON.stringify({ cpf: formData.cpf }));
+
+      Toast.show({
+        type: 'success',
+        text1: 'Sucesso',
+        text2: 'Login realizado com sucesso!',
+      });
+
+      // Navegar para a tela principal
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Main' }],
+      });
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Ocorreu um erro ao fazer login. Tente novamente.',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -86,8 +157,16 @@ const LoginScreen = () => {
                 />
               </View>
 
-              <Button onPress={handleSubmit} style={styles.primaryButton}>
-                <Text style={styles.primaryButtonText}>Entrar</Text>
+              <Button 
+                onPress={handleSubmit} 
+                style={styles.primaryButton}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Entrar</Text>
+                )}
               </Button>
             </View>
 
@@ -146,9 +225,6 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   formFieldGroup: {
-    marginBottom: 24,
-  },
-  passwordContainer: {
     marginBottom: 24,
   },
   passwordHeader: {
