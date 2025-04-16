@@ -1,25 +1,12 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  ScrollView, 
-  KeyboardAvoidingView, 
-  Platform,
-  ActivityIndicator
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, KeyboardAvoidingView, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
+import * as formatters from '../utils/formatters';
 
 import Header from '../components/Header';
-import Input from '../components/ui/Input';
-import Button from '../components/ui/Button';
-import Checkbox from '../components/ui/Checkbox';
-import theme from '../themes/theme';
-import * as formatters from '../utils/formatters';
+import LoginForm from '../components/forms/LoginForm';
 
 const API_URL = 'http://localhost:8080';
 
@@ -157,56 +144,16 @@ const LoginScreen = () => {
               <Text style={styles.subtitle}>Entre na sua conta para continuar</Text>
             </View>
 
-            <View style={styles.form}>
-              <View style={styles.formFieldGroup}>
-                <Text style={styles.formLabel}>CPF</Text>
-                <Input
-                  placeholder="000.000.000-00"
-                  value={formData.cpf}
-                  onChangeText={(text) => handleChange('cpf', text)}
-                  onBlur={() => handleBlur('cpf')}
-                  keyboardType="numeric"
-                  style={[styles.inputField, cpfError && styles.inputError]}
-                />
-                {cpfError ? <Text style={styles.errorText}>{cpfError}</Text> : null}
-              </View>
-
-              <View style={styles.formFieldGroup}>
-                <View style={styles.passwordHeader}>
-                  <Text style={styles.formLabel}>Senha</Text>
-                  <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
-                    <Text style={styles.forgotPassword}>Esqueceu a senha?</Text>
-                  </TouchableOpacity>
-                </View>
-                <Input
-                  placeholder="••••••••"
-                  value={formData.password}
-                  onChangeText={(text) => handleChange('password', text)}
-                  secureTextEntry
-                  style={styles.inputField}
-                />
-              </View>
-
-              <View style={styles.checkboxWrapper}>
-                <Checkbox
-                  checked={rememberMe}
-                  onPress={() => setRememberMe(!rememberMe)}
-                  label="Lembrar de mim"
-                />
-              </View>
-
-              <Button 
-                onPress={handleSubmit} 
-                style={styles.primaryButton}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.primaryButtonText}>Entrar</Text>
-                )}
-              </Button>
-            </View>
+            <LoginForm
+              formData={formData}
+              handleChange={handleChange}
+              handleBlur={handleBlur}
+              handleSubmit={handleSubmit}
+              cpfError={cpfError}
+              rememberMe={rememberMe}
+              setRememberMe={setRememberMe}
+              loading={loading}
+            />
 
             <View style={styles.registerContainer}>
               <Text style={styles.registerText}>
@@ -259,53 +206,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
-  form: {
-    marginBottom: 30,
-  },
-  formFieldGroup: {
-    marginBottom: 24,
-  },
-  passwordHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  formLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#111',
-    marginBottom: 8,
-  },
-  forgotPassword: {
-    fontSize: 14,
-    color: '#000',
-    textDecorationLine: 'underline',
-  },
-  checkboxWrapper: {
-    marginBottom: 24,
-  },
-  inputField: {
-    height: 40,
-    borderWidth: 1,
-    borderColor: '#e2e2e2',
-    borderRadius: 4,
-    paddingHorizontal: 12,
-    fontSize: 14,
-    backgroundColor: '#fff',
-  },
-  primaryButton: {
-    backgroundColor: '#000',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '500',
-  },
   registerContainer: {
     alignItems: 'center',
   },
@@ -317,14 +217,6 @@ const styles = StyleSheet.create({
     color: '#000',
     fontWeight: '500',
     textDecorationLine: 'underline',
-  },
-  inputError: {
-    borderColor: '#ff0000',
-  },
-  errorText: {
-    color: '#ff0000',
-    fontSize: 12,
-    marginTop: 4,
   },
 });
 

@@ -9,7 +9,8 @@ const Button = ({
   fullWidth = false,
   disabled = false,
   loading = false,
-  style 
+  style,
+  textStyle
 }) => {
   const getVariantStyle = () => {
     switch (variant) {
@@ -69,7 +70,7 @@ const Button = ({
       {loading ? (
         <ActivityIndicator color={variantStyle.color} size="small" />
       ) : (
-        <Text style={[styles.text, { color: variantStyle.color }]}>
+        <Text style={[styles.text, { color: variantStyle.color }, textStyle]}>
           {children}
         </Text>
       )}
