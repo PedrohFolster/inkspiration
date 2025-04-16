@@ -25,6 +25,7 @@ import theme from '../themes/theme';
 // Importante: Certifique-se de instalar o axios antes de usar
 // Para instalar: npm install axios
 import axios from 'axios';
+import * as formatters from '../utils/formatters';
 
 const RegisterScreen = () => {
   const navigation = useNavigation();
@@ -33,6 +34,7 @@ const RegisterScreen = () => {
   const [isArtist, setIsArtist] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [cpfError, setCpfError] = useState('');
   
   const [formData, setFormData] = useState({
     // Dados pessoais
@@ -174,14 +176,51 @@ const RegisterScreen = () => {
   };
 
   const handleChange = (field, value) => {
+    let formattedValue = value;
+    
+    // Apply appropriate formatter based on field type
+    switch (field) {
+      case 'cpf':
+        formattedValue = formatters.formatCPF(value);
+        // Clear error when typing
+        setCpfError('');
+        break;
+      case 'cep':
+        formattedValue = formatters.formatCEP(value);
+        break;
+      case 'telefone':
+        formattedValue = formatters.formatPhone(value);
+        break;
+      case 'dataNascimento':
+        formattedValue = formatters.formatBirthDate(value);
+        break;
+      case 'email':
+        if (!formatters.validateEmail(value) && value.length > 0) {
+          setErrorMessage('Por favor, insira um email válido');
+        } else {
+          setErrorMessage('');
+        }
+        break;
+    }
+
     setFormData({
       ...formData,
-      [field]: value,
+      [field]: formattedValue,
     });
 
-    // Se o campo for CEP e tiver 8 dígitos (sem hífen), faz a consulta
+    // If the field is CEP and has 8 digits (without hyphen), fetch address
     if (field === 'cep' && value.replace(/\D/g, '').length === 8) {
       buscarCep(value);
+    }
+  };
+
+  const handleBlur = (field) => {
+    if (field === 'cpf' && formData.cpf) {
+      if (!formatters.validateCPF(formData.cpf)) {
+        setCpfError('CPF inválido');
+      } else {
+        setCpfError('');
+      }
     }
   };
 
@@ -301,44 +340,13 @@ const RegisterScreen = () => {
   };
 
   const handleRegister = async () => {
-    if (formData.senha !== formData.confirmarSenha) {
-      Toast.show({
-        type: 'error',
-        text1: 'Erro',
-        text2: 'As senhas não coincidem',
-        position: 'top',
-        visibilityTime: 3000
-      });
-      return;
-    }
-
-    if (!formData.termsAccepted) {
-      Toast.show({
-        type: 'error',
-        text1: 'Erro',
-        text2: 'Você precisa aceitar os termos de uso',
-        position: 'top',
-        visibilityTime: 3000
-      });
-      return;
-    }
-
-    if (!validateForm()) {
-      Toast.show({
-        type: 'error',
-        text1: 'Erro',
-        text2: 'Por favor, preencha todos os campos obrigatórios',
-        position: 'top',
-        visibilityTime: 3000
-      });
-      return;
-    }
+    if (!validateForm()) return;
 
     try {
       setIsLoading(true);
       setErrorMessage('');
 
-      // Formatar data de nascimento para o formato esperado pelo backend (AAAA-MM-DD)
+      // Formatar data de nascimento para o formato esperado pelo backend (DD/MM/YYYY)
       const dataNascFormatada = formatDateToBackend(formData.dataNascimento);
       
       // Preparar objeto de endereço conforme esperado pelo backend
@@ -364,8 +372,6 @@ const RegisterScreen = () => {
         role: 'user' // Registrando como usuário comum
       };
 
-      console.log('Enviando dados de registro:', userData);
-      
       const baseUrl = 'http://localhost:8080'; 
       const response = await fetch(`${baseUrl}/auth/register`, {
         method: 'POST',
@@ -374,58 +380,55 @@ const RegisterScreen = () => {
         },
         body: JSON.stringify(userData)
       });
-      
+
+      const data = await response.json();
+
       if (!response.ok) {
-        if (response.status === 409) {
-          Toast.show({
-            type: 'error',
-            text1: 'Erro',
-            text2: 'CPF ou email já cadastrado',
-            position: 'top',
-            visibilityTime: 3000
+        // Se houver erros de validação do backend
+        if (data.errors) {
+          // Exibe cada erro em um toast separado
+          Object.entries(data.errors).forEach(([field, message]) => {
+            Toast.show({
+              type: 'error',
+              text1: 'Erro de Validação',
+              text2: message,
+              position: 'top',
+              visibilityTime: 4000,
+            });
           });
         } else {
-          const errorData = await response.json();
+          // Se houver um erro geral
           Toast.show({
             type: 'error',
             text1: 'Erro',
-            text2: errorData.message || 'Ocorreu um erro ao criar sua conta',
+            text2: data.message || 'Ocorreu um erro ao cadastrar',
             position: 'top',
-            visibilityTime: 3000
+            visibilityTime: 4000,
           });
         }
         return;
       }
 
-      // A resposta é apenas o token como string
-      const token = await response.text();
-
-      // Salvar token e dados do usuário
-      await AsyncStorage.setItem('token', token);
-      await AsyncStorage.setItem('user', JSON.stringify({ cpf: formData.cpf }));
-
+      // Exibe mensagem de sucesso do backend ou uma mensagem padrão
       Toast.show({
         type: 'success',
         text1: 'Sucesso',
-        text2: 'Conta criada com sucesso! Faça login para continuar.',
+        text2: data.message || 'Cadastro realizado com sucesso!',
         position: 'top',
-        visibilityTime: 3000,
-        onHide: () => {
-          // Navegar para a tela de login após o toast desaparecer
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Login' }],
-          });
-        }
+        visibilityTime: 4000,
       });
+
+      // Aguarda um momento para mostrar o toast antes de navegar
+      setTimeout(() => {
+        navigation.navigate('Login');
+      }, 1000);
     } catch (error) {
-      console.error('Erro ao registrar:', error);
       Toast.show({
         type: 'error',
         text1: 'Erro',
-        text2: 'Ocorreu um erro ao criar sua conta. Tente novamente.',
+        text2: 'Ocorreu um erro ao cadastrar. Tente novamente.',
         position: 'top',
-        visibilityTime: 3000
+        visibilityTime: 4000,
       });
     } finally {
       setIsLoading(false);
@@ -434,12 +437,29 @@ const RegisterScreen = () => {
 
   const validateForm = () => {
     if (!formData.nome || !formData.sobrenome) {
-      setErrorMessage('Nome e sobrenome são obrigatórios');
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'Nome e sobrenome são obrigatórios',
+      });
       return false;
     }
     
     if (!formData.cpf) {
-      setErrorMessage('CPF é obrigatório');
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'CPF é obrigatório',
+      });
+      return false;
+    }
+
+    if (!formatters.validateCPF(formData.cpf)) {
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'CPF inválido',
+      });
       return false;
     }
     
@@ -469,13 +489,26 @@ const RegisterScreen = () => {
   const formatDateToBackend = (dateString) => {
     if (!dateString) return null;
     
-    // Se o formato for DD/MM/AAAA, converte para AAAA-MM-DD
-    const parts = dateString.split('/');
-    if (parts.length === 3) {
-      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    // Remove caracteres não numéricos
+    const numbers = dateString.replace(/\D/g, '');
+    
+    // Garantir que a data esteja no formato DD/MM/YYYY
+    if (numbers.length <= 2) return numbers;
+    if (numbers.length <= 4) {
+      const day = numbers.slice(0, 2);
+      const month = numbers.slice(2);
+      return `${day}/${month}`;
     }
     
-    return dateString;
+    const day = numbers.slice(0, 2);
+    const month = numbers.slice(2, 4);
+    const year = numbers.slice(4, 8);
+    
+    // Validar dia (1-31) e mês (1-12)
+    const validDay = Math.min(parseInt(day), 31);
+    const validMonth = Math.min(parseInt(month), 12);
+    
+    return `${validDay.toString().padStart(2, '0')}/${validMonth.toString().padStart(2, '0')}/${year}`;
   };
 
   const renderPersonalTab = () => {
@@ -509,9 +542,11 @@ const RegisterScreen = () => {
             placeholder="000.000.000-00"
             value={formData.cpf}
             onChangeText={(text) => handleChange('cpf', text)}
+            onBlur={() => handleBlur('cpf')}
             keyboardType="numeric"
-            style={styles.inputField}
+            style={[styles.inputField, cpfError && styles.inputError]}
           />
+          {cpfError ? <Text style={styles.errorText}>{cpfError}</Text> : null}
         </View>
         
         <View style={styles.formRow}>
@@ -1493,6 +1528,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#777',
     marginTop: 4,
+  },
+  inputError: {
+    borderColor: '#ff0000',
   },
 });
 

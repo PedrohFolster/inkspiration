@@ -19,6 +19,7 @@ import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 import Checkbox from '../components/ui/Checkbox';
 import theme from '../themes/theme';
+import * as formatters from '../utils/formatters';
 
 const API_URL = 'http://localhost:8080';
 
@@ -30,9 +31,29 @@ const LoginScreen = () => {
   });
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [cpfError, setCpfError] = useState('');
 
   const handleChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    let formattedValue = value;
+    
+    // Apply CPF formatter
+    if (field === 'cpf') {
+      formattedValue = formatters.formatCPF(value);
+      // Clear error when typing
+      setCpfError('');
+    }
+
+    setFormData(prev => ({ ...prev, [field]: formattedValue }));
+  };
+
+  const handleBlur = (field) => {
+    if (field === 'cpf' && formData.cpf) {
+      if (!formatters.validateCPF(formData.cpf)) {
+        setCpfError('CPF inválido');
+      } else {
+        setCpfError('');
+      }
+    }
   };
 
   const handleSubmit = async () => {
@@ -41,6 +62,15 @@ const LoginScreen = () => {
         type: 'error',
         text1: 'Erro',
         text2: 'Por favor, preencha todos os campos',
+      });
+      return;
+    }
+
+    if (!formatters.validateCPF(formData.cpf)) {
+      Toast.show({
+        type: 'error',
+        text1: 'Erro',
+        text2: 'CPF inválido',
       });
       return;
     }
@@ -59,18 +89,24 @@ const LoginScreen = () => {
       });
 
       if (!response.ok) {
-        if (response.status === 401) {
+        const data = await response.json();
+        if (response.status === 400 && data.message.includes('CPF')) {
+          Toast.show({
+            type: 'error',
+            text1: 'Erro',
+            text2: 'CPF inválido',
+          });
+        } else if (response.status === 401) {
           Toast.show({
             type: 'error',
             text1: 'Erro',
             text2: 'CPF ou senha inválidos',
           });
         } else {
-          const errorData = await response.json();
           Toast.show({
             type: 'error',
             text1: 'Erro',
-            text2: errorData.message || 'Ocorreu um erro ao fazer login',
+            text2: data.message || 'Ocorreu um erro ao fazer login',
           });
         }
         return;
@@ -128,9 +164,11 @@ const LoginScreen = () => {
                   placeholder="000.000.000-00"
                   value={formData.cpf}
                   onChangeText={(text) => handleChange('cpf', text)}
+                  onBlur={() => handleBlur('cpf')}
                   keyboardType="numeric"
-                  style={styles.inputField}
+                  style={[styles.inputField, cpfError && styles.inputError]}
                 />
+                {cpfError ? <Text style={styles.errorText}>{cpfError}</Text> : null}
               </View>
 
               <View style={styles.formFieldGroup}>
@@ -279,6 +317,14 @@ const styles = StyleSheet.create({
     color: '#000',
     fontWeight: '500',
     textDecorationLine: 'underline',
+  },
+  inputError: {
+    borderColor: '#ff0000',
+  },
+  errorText: {
+    color: '#ff0000',
+    fontSize: 12,
+    marginTop: 4,
   },
 });
 
